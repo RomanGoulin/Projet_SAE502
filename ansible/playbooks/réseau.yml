@@ -1,0 +1,45 @@
+- name: Configuration réseau du routeur et du switch
+  hosts: localhost
+  become: true
+  tasks:
+
+    # Installer les outils réseau nécessaires dans le routeur et le switch
+    - name: Installer outils réseau
+      community.docker.docker_exec:
+        container: "{{ item }}"
+        command: apt update && apt install -y iproute2 bridge-utils
+      loop:
+        - routeur
+        - switch
+
+    # Configurer WAN eth0 du routeur pour utiliser l'IP du PC
+    - name: Configurer WAN du routeur (host network)
+      community.docker.docker_exec:
+        container: routeur
+        command: dhclient eth0
+
+    # Configurer LAN interne eth1 sur le routeur
+    - name: Configurer LAN interne sur routeur
+      community.docker.docker_exec:
+        container: routeur
+        command: |
+          ip addr add 192.168.10.1/24 dev eth1 || true
+          ip link set eth1 up
+
+    # Créer un bridge sur le switch pour VLAN 1
+    - name: Créer bridge br0 sur switch (VLAN 1)
+      community.docker.docker_exec:
+        container: switch
+        command: |
+          ip link add name br0 type bridge || true
+          ip addr add 192.168.10.254/24 dev br0 || true
+          ip link set br0 up
+
+    # Connecter les conteneurs services au bridge du switch
+    - name: Connecter les conteneurs au switch
+      community.docker.docker_exec:
+        container: switch
+        command: |
+          for iface in dns_dhcp web samba ldap; do
+            ip link set $iface master br0 || true
+          done
