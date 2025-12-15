@@ -1,0 +1,73 @@
+- name: Création des conteneurs
+  hosts: localhost
+  become: true
+  tasks:
+
+    - name: Créer le réseau LAN
+      community.docker.docker_network:
+        name: lan_net
+        driver: bridge
+        ipam_config:
+          - subnet: 192.168.10.0/24
+
+    - name: Conteneur Routeur
+      community.docker.docker_container:
+        name: routeur
+        image: debian:12
+        state: started
+        privileged: true
+        tty: true
+        command: sleep infinity
+        networks:
+          - name: lan_net
+
+    - name: Conteneur Switch (logique)
+      community.docker.docker_container:
+        name: switch
+        image: debian:12
+        state: started
+        privileged: true
+        tty: true
+        command: sleep infinity
+        networks:
+          - name: lan_net
+
+    - name: Conteneur DNS + DHCP
+      community.docker.docker_container:
+        name: dns_dhcp
+        image: debian:12
+        state: started
+        tty: true
+        command: sleep infinity
+        networks:
+          - name: lan_net
+
+    - name: Conteneur WEB
+      community.docker.docker_container:
+        name: web
+        image: debian:12
+        state: started
+        tty: true
+        command: sleep infinity
+        networks:
+          - name: lan_net
+
+    - name: Conteneur SAMBA
+      community.docker.docker_container:
+        name: samba
+        image: debian:12
+        state: started
+        tty: true
+        command: sleep infinity
+        networks:
+          - name: lan_net
+
+    - name: Conteneur LDAP
+      community.docker.docker_container:
+        name: ldap
+        image: debian:12
+        state: started
+        tty: true
+        command: sleep infinity
+        networks:
+          - name: lan_net
