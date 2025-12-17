@@ -1,62 +1,80 @@
-- name: Création des conteneurs pour le réseau
-  hosts: localhost
+- name: Création de l'image et des conteneurs
+  hosts: local
   become: true
+  collections:
+    - community.docker
+
   tasks:
 
-    # Conteneur Routeur (WAN = IP du PC, LAN interne)
-    - name: Créer conteneur routeur
+    - name: Construire l'image Debian avec iproute2
+      community.docker.docker_image:
+        name: debian-services
+        tag: "12"
+        build:
+          path: /home/rt/git/ansible/docker
+          dockerfile: Dockerfile-services
+        source: build
+
+    - name: Créer réseau LAN interne avec gateway
+      community.docker.docker_network:
+        name: lan_net
+        internal: true
+        ipam_config:
+          - subnet: 192.168.10.0/24
+            gateway: 192.168.10.100
+
+    - name: Créer réseau WAN
+      community.docker.docker_network:
+        name: wan_net
+        driver: bridge
+
+    - name: Créer routeur
       community.docker.docker_container:
         name: routeur
-        image: debian:12
-        state: started
+        image: debian-services:12
         privileged: true
-        network_mode: host   # eth0 = WAN (IP du PC)
-        tty: true
-        command: sleep infinity
-
-    # Conteneur Switch (logiciel, plusieurs interfaces)
-    - name: Créer conteneur switch
-      community.docker.docker_container:
-        name: switch
-        image: debian:12
+        networks:
+          - name: wan_net
+          - name: lan_net
+            ipv4_address: 192.168.10.1
         state: started
-        privileged: true
-        tty: true
-        command: sleep infinity
 
-    # Conteneur DNS + DHCP
-    - name: Créer conteneur DNS/DHCP
+    - name: Créer dns_dhcp
       community.docker.docker_container:
         name: dns_dhcp
-        image: debian:12
+        image: debian-services:12
+        privileged: true
+        networks:
+          - name: lan_net
+            ipv4_address: 192.168.10.2
         state: started
-        tty: true
-        command: sleep infinity
 
-    # Conteneur Web (Apache + DB)
-    - name: Créer conteneur Web
+    - name: Créer web
       community.docker.docker_container:
         name: web
-        image: debian:12
+        image: debian-services:12
+        privileged: true
+        networks:
+          - name: lan_net
+            ipv4_address: 192.168.10.3
         state: started
-        tty: true
-        command: sleep infinity
 
-    # Conteneur Samba
-    - name: Créer conteneur Samba
+    - name: Créer samba
       community.docker.docker_container:
         name: samba
-        image: debian:12
+        image: debian-services:12
+        privileged: true
+        networks:
+          - name: lan_net
+            ipv4_address: 192.168.10.4
         state: started
-        tty: true
-        command: sleep infinity
 
-    # Conteneur LDAP
-    - name: Créer conteneur LDAP
+    - name: Créer ldap (AD)
       community.docker.docker_container:
         name: ldap
-        image: debian:12
+        image: debian-services:12
+        privileged: true
+        networks:
+          - name: lan_net
+            ipv4_address: 192.168.10.5
         state: started
-        tty: true
-        command: sleep infinity
-
