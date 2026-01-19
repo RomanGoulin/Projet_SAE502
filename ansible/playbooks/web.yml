@@ -1,0 +1,49 @@
+- name: Configuration du serveur WEB Apache
+  hosts: localhost
+  become: true
+  tasks:
+
+    - name: Update Apache
+      command: docker exec web apt update -y
+
+    - name: Update Apache
+      command: docker exec web apt upgrade -y
+
+    - name: Installer Apache
+      command: docker exec web apt install -y apache2
+
+    - name: Créer le dossier du site bricolou
+      command: docker exec web mkdir -p /var/www/bricolou
+
+    - name: Créer le fichier HTML principal sur une ligne
+      shell: docker exec web sh -c 'echo "<!DOCTYPE html><html lang=\"fr\"><head><meta charset=\"UTF-8\"><title>Bricolou</title><link rel=\"stylesheet\" href=\"style.css\"></head><body><div class=\"container\"><h1>Bienvenue sur Bricolou</h1><p>Site de démonstration – Projet SAE 502</p><button>Entrer</button></div></body></html>" > /var/www/bricolou/index.html'
+
+    - name: Créer le fichier CSS sur une ligne
+      shell: docker exec web sh -c 'echo "body { background-color:#f2f2f2; font-family:Arial,sans-serif; margin:0; padding:0; } .container { width:400px; margin:100px auto; text-align:center; background:white; padding:30px; border-radius:10px; } h1 { color:#2c3e50; } button { padding:10px 20px; background-color:#3498db; color:white; border:none; border-radius:5px; }" > /var/www/bricolou/style.css'
+
+    - name: Créer le VirtualHost Apache
+      shell: |
+        docker exec web sh -c 'cat <<EOF > /etc/apache2/sites-available/bricolou.conf
+        <VirtualHost *:80>
+          ServerName bricolou.local
+          DocumentRoot /var/www/bricolou
+
+          <Directory /var/www/bricolou>
+            AllowOverride None
+            Require all granted
+          </Directory>
+
+          ErrorLog \${APACHE_LOG_DIR}/error.log
+          CustomLog \${APACHE_LOG_DIR}/access.log combined
+        </VirtualHost>
+        EOF'
+
+    - name: Désactiver le site par défaut
+      command: docker exec web a2dissite 000-default.conf
+      ignore_errors: true
+
+    - name: Activer le site bricolou
+      command: docker exec web a2ensite bricolou.conf
+
+    - name: Redémarrer Apache
+      command: docker exec web service apache2 restart
