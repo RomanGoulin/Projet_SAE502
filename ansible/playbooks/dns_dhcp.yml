@@ -1,0 +1,91 @@
+
+- name: Configuration du serveur dns_dhcp
+  hosts: localhost
+  become: true
+  tasks:
+
+    - name: Update
+      command: docker exec dns_dhcp apt update -y
+
+    - name: Upgrade
+      command: docker exec dns_dhcp apt upgrade -y
+
+    - name: Installation ISC DHCP et BIND9
+      command: docker exec dns_dhcp apt install bind9 dnsutils isc-dhcp-server -y
+
+    - name: Déployer /etc/bind/named.conf.options
+      shell: |
+        docker exec dns_dhcp sh -c 'cat <<EOF > /etc/bind/named.conf.options
+          options {
+              directory "/var/cache/bind";
+              listen-on { any; };
+              allow-query { any; };
+              recursion yes;
+              allow-recursion { 127.0.0.1; 192.168.10.0/24; };
+              dnssec-validation auto;
+              forwarders {
+                   10.250.250.5;
+                   10.250.250.12;
+                   192.168.102.1;
+              };
+          };
+          '
+
+    - name: Déployer /etc/bind/named.conf.local
+      shell: |
+        docker exec dns_dhcp sh -c 'cat <<EOF > /etc/bind/named.conf.local
+          zone "sae.local" {
+              type master;
+              file "/etc/bind/sae.local";
+          };
+          '
+
+    - name: /etc/bind/sae.local
+      shell: |
+        docker exec dns_dhcp sh -c 'cat <<EOF > /etc/bind/sae.local
+          $TTL    86400
+          @       IN      SOA     dns1.lab.local. admin.lab.local. (
+                                  2026011901    ; serial
+                                  3600          ; refresh
+                                  1800          ; retry
+                                  604800        ; expire
+                                  86400 )       ; negative ttl
+          @                                     IN      NS  dns1.lab.local.
+          dns1                                  IN      A   192.168.10.2
+          gw                                    IN      A   192.168.10.1
+          web                                   IN      A   192.168.10.3
+          '
+
+    - name: /etc/resolv.conf
+      shell: |
+        docker exec dns_dhcp sh -c 'cat <<EOF > /etc/resolv.conf
+          search sae.local
+          nameserver 127.0.0.1
+          '
+
+    - name: /etc/dhcp/dhcpd.conf
+      shell: |
+        docker exec dns_dhcp sh -c 'cat <<EOF > /etc/dhcp/dhcpd.conf
+          option domain-name "sae.local";
+          authoritative;
+          default-lease-time 600;
+          max-lease-time 7200;
+          ddns-update-style none;
+          log-facility local7;
+          subnet 192.168.10.0 netmask 255.255.255.0 {
+                  range 192.168.10.3 192.168.10.254;
+
+                  option domain-name-servers 192.168.10.2;
+
+                  option routers 192.168.10.1;
+          }
+          '
+
+    - name: Déployer /etc/default/isc-dhcp-server
+      shell: |
+        docker exec dns_dhcp sh -c 'cat <<EOF > /etc/default/isc-dhcp-server
+          INTERFACESv4="eth0"
+          '
+
+    - name: Redémarrer dns et dhcp 
+      command: docker exec dns_dhcp service named restart

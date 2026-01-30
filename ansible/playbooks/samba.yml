@@ -1,0 +1,56 @@
+
+- name: Configuration du serveur dns_dhcp
+  hosts: localhost
+  become: true
+  tasks:
+
+    - name: Update
+      command: docker exec dns_dhcp apt update -y
+
+    - name: Upgrade
+      command: docker exec dns_dhcp apt upgrade -y
+
+    - name: Installation SAMBA
+      command: docker exec dns_dhcp apt install samba -y
+
+    - name: créer dossier pour patage samba
+      command: docker exec samba mkdir /partage
+    - name: Déployer /etc/bind/smb.conf
+      shell: |
+        docker exec dns_dhcp sh -c 'cat <<EOF > /etc/samba/smb.conf
+          [global]
+              workgroup = sae.local
+              server string = Serveur Samba Linux
+              netbios name = sae
+              security = user
+              map to guest = bad user
+
+              log file = /var/log/samba/log.%m
+              max log size = 1000
+              logging = file
+
+              panic action = /usr/share/samba/panic-action %d
+
+              server role = member server
+              obey pam restrictions = yes
+              unix password sync = yes
+              passwd program = /usr/bin/passwd %u
+              passwd chat = *Enter\snew\s*\spassword:* %n\n *Retype\snew\s*\spassword:* %n\n *password\supdated\ssuccessfully* .
+              pam password change = yes
+
+              load printers = no
+              disable spoolss = yes
+
+              dns proxy = no
+
+              # ===================== PARTAGE ======================
+
+          [PartageLinux]
+              path = /partage
+              browseable = yes
+              read only = no
+              writable = yes
+              valid users = sambauser
+              create mask = 0777
+              directory mask = 0777
+          '
